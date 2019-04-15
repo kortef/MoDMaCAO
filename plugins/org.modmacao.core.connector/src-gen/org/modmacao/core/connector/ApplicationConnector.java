@@ -15,10 +15,15 @@
  */
 package org.modmacao.core.connector;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
+import org.eclipse.cmf.occi.core.Action;
 import org.eclipse.cmf.occi.core.Link;
+import org.eclipse.cmf.occi.infrastructure.Compute;
 import org.modmacao.cm.ConfigurationManagementTool;
 import org.modmacao.cm.ansible.AnsibleCMTool;
 import org.modmacao.occi.platform.Component;
@@ -36,6 +41,7 @@ import org.slf4j.LoggerFactory;
 public class ApplicationConnector extends org.modmacao.occi.platform.impl.ApplicationImpl
 {
 	private ConfigurationManagementTool cmtool = new AnsibleCMTool();
+	private volatile Set<Compute> blockedVMs = new HashSet<Compute>();
 	
 	/**
 	 * Initialize the logger.
@@ -126,9 +132,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 
 		case Status.ACTIVE_VALUE:
 			LOGGER.debug("Fire transition(state=active, action=\"stop\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.stop();
-			}
+			parallelComponentManagement("stop");
 			status = cmtool.stop(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.INACTIVE))
 				setOcciAppState(Status.INACTIVE);
@@ -159,9 +163,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 
 		case Status.INACTIVE_VALUE:
 			LOGGER.debug("Fire transition(state=inactive, action=\"start\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.start();
-			}
+			parallelComponentManagement("start");
 			status = cmtool.start(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.ACTIVE))
 				setOcciAppState(Status.ACTIVE);
@@ -173,21 +175,16 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 		case Status.UNDEPLOYED_VALUE:
 			LOGGER.debug("Fire transition(state=undeployed, action=\"start\")...");
 			// First deploy components
-			for (Component component: this.getConnectedComponents()) {
-				component.deploy();
-			}
+			
+			parallelComponentDeployment();
 			this.deploy();
 			
 			// then configure them
-			for (Component component: this.getConnectedComponents()) {
-				component.configure();
-			}
+			parallelComponentManagement("configure");
 			this.configure();
 			
 			// then start them
-			for (Component component: this.getConnectedComponents()) {
-				component.start();
-			}
+			parallelComponentManagement("start");
 			status = cmtool.start(this);
 			
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.ACTIVE))
@@ -200,6 +197,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 			break;
 		}
 	}
+	
 	// End of user code
 	// Start of user code Application_Kind_undeploy_action
 	/**
@@ -219,14 +217,10 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 
 		case Status.ACTIVE_VALUE:
 			LOGGER.debug("Fire transition(state=active, action=\"undeploy\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.stop();
-			}
+			parallelComponentManagement("stop");
 			this.stop();
 			
-			for (Component component: this.getConnectedComponents()) {
-				component.undeploy();
-			}
+			parallelComponentManagement("undeploy");
 			status = cmtool.undeploy(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.UNDEPLOYED))
 				setOcciAppState(Status.UNDEPLOYED);
@@ -235,9 +229,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 			break;
 		case Status.INACTIVE_VALUE:
 			LOGGER.debug("Fire transition(state=inactive, action=\"undeploy\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.undeploy();
-			}
+			parallelComponentManagement("undeploy");
 			status = cmtool.undeploy(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.UNDEPLOYED))
 				setOcciAppState(Status.UNDEPLOYED);
@@ -246,9 +238,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 			break;
 		case Status.DEPLOYED_VALUE:
 			LOGGER.debug("Fire transition(state=deployed, action=\"undeploy\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.undeploy();
-			}
+			parallelComponentManagement("undeploy");
 			status = cmtool.undeploy(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.UNDEPLOYED))
 				setOcciAppState(Status.UNDEPLOYED);
@@ -257,9 +247,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 			break;
 		case Status.ERROR_VALUE:
 			LOGGER.debug("Fire transition(state=error, action=\"undeploy\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.undeploy();
-			}
+			parallelComponentManagement("undeploy");
 			status = cmtool.undeploy(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.UNDEPLOYED))
 				setOcciAppState(Status.UNDEPLOYED);
@@ -290,9 +278,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 
 		case Status.DEPLOYED_VALUE:
 			LOGGER.debug("Fire transition(state=deployed, action=\"configure\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.configure();
-			}
+			parallelComponentManagement("configure");
 			
 			status = cmtool.configure(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.INACTIVE))
@@ -324,9 +310,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 
 		case Status.UNDEPLOYED_VALUE:
 			LOGGER.debug("Fire transition(state=undeployed, action=\"deploy\")...");
-			for (Component component: this.getConnectedComponents()) {
-				component.deploy();
-			}
+			parallelComponentDeployment();
 			
 			status = cmtool.deploy(this);
 			if (status == 0 && assertCompsStatusEquals(getConnectedComponents(), Status.DEPLOYED))
@@ -340,6 +324,135 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 		}
 	}
 	
+	public void parallelComponentDeployment() {
+		LOGGER.info("ENTERING PARALLEL DEPLOYMENT");
+		List<Component> scheduledComponents = getUndeployedComponents();
+		if(everyComponentAlreadyDeployed() == false) {
+			List<Component> compCycle = new ArrayList<Component>();
+			for(Component comp: getUndeployedComponents()) {
+				if(computeIsAlreadyTargetedByComp(comp) == false) {
+					compCycle.add(comp);
+					blockedVMs.addAll(getConnectedComputeNodes(comp));
+				}
+			}
+			 List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+			 //List<Thread> threads = new ArrayList<Thread>();
+			 LOGGER.info("\nPRIOR SCHEDULED: " + scheduledComponents);
+			 slaves.addAll(createSubtasks(compCycle, "deploy"));
+			 scheduledComponents.removeAll(compCycle);
+			 LOGGER.info("CURRENT CYCLE: " + compCycle);
+			 LOGGER.info("POST SCHEDULED: " + scheduledComponents);
+			 
+			 
+			 List<Thread> threads = new ArrayList<Thread>();
+			 for (DeployerSlave slave : slaves) { 
+				  Thread thread = new Thread(slave);
+				  threads.add(thread);
+				  thread.start(); 
+			 }
+			 for (Thread t : threads) {
+				 try { 
+					 t.join(); 
+					 LOGGER.info("Thread: " + t +"joined");
+				 } catch (InterruptedException e) { // TODO Auto-generated catch
+					 e.printStackTrace();
+				 }
+			 
+			 LOGGER.info("Threads joined: Emptying blocked list");
+			 //blockedVMs.clear();
+			 }
+		}
+	}
+	
+	private List<Component> getUndeployedComponents() {
+		List<Component> undeployed = new ArrayList<Component>();
+		for(Component comp: this.getConnectedComponents()) {
+			if(comp.getOcciComponentState().getValue() == Status.UNDEPLOYED_VALUE) {
+				undeployed.add(comp);
+			}
+		}
+		return undeployed;
+	}
+	private boolean everyComponentAlreadyDeployed() {
+		for(Component comp: this.getConnectedComponents()) {
+			if(comp.getOcciComponentState().getValue() == Status.UNDEPLOYED_VALUE || comp.getOcciComponentState().getValue() == Status.ERROR_VALUE) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	private void parallelComponentManagement(String action) {
+		LOGGER.info("Performing parallel execution of "+ action);
+		List<Component> scheduledComponents = this.getConnectedComponents();
+		List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+		List<Thread> threads = new ArrayList<Thread>();
+		LOGGER.info("Executing "+ action +" on: " + scheduledComponents);
+		slaves.addAll(createSubtasks(scheduledComponents, action));
+			 
+		for (DeployerSlave slave : slaves) { 
+				Thread thread = new Thread(slave);
+				threads.add(thread);
+				thread.start(); 
+		} 
+		for (Thread t : threads) {
+				try { 
+					 t.join(); 
+					 LOGGER.info("Thread: " + t +"joined");
+				 } catch (InterruptedException e) { // TODO Auto-generated catch
+					 e.printStackTrace();
+				 }
+			 }
+	}
+	
+	private boolean computeIsAlreadyTargetedByComp(Component comp) {
+		List<Compute> computeTargets = getConnectedComputeNodes(comp);
+		LOGGER.info("BLOCKED VMs: " + this.blockedVMs);
+		LOGGER.info("COMPUTE TARGETS: " + computeTargets);
+		
+		for(Compute compute: computeTargets) {
+			if(blockedVMs.contains(compute)){
+				return true;
+			}
+		}
+		//if(blockedVMs.contains(computeTargets)) {
+		//	return true;
+		//}
+		return false;
+	}
+
+	private List<Compute> getConnectedComputeNodes(Component comp) {
+		List<Compute> computes = new ArrayList<Compute>();
+		for(Link pLink: comp.getLinks()) {
+			if(pLink.getTarget() instanceof Compute) {
+				computes.add((Compute) pLink.getTarget());
+			}
+			if(pLink.getTarget() instanceof Component) {
+				computes.addAll(getConnectedComputeNodes((Component) pLink.getTarget()));
+			}
+		}
+		return computes;
+	}
+	
+	private List<DeployerSlave> createSubtasks(List<Component> comps, String action) {
+		List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+
+		for (Component comp : comps) {
+			DeployerSlave slave = new DeployerSlave(this, comp, action);
+			slaves.add(slave);
+		}
+		return slaves;
+	}
+	
+	
+	public synchronized Set<Compute> getBlockedVMs() {
+		return blockedVMs;
+	}
+
+	public synchronized void setBlockedVMs(Set<Compute> blockedVMs) {
+		this.blockedVMs = blockedVMs;
+	}
+
 	private List<Component> getConnectedComponents() {
 		LinkedList<Component> connectedComponents = new LinkedList<Component>();
 		for (Link link: this.getLinks()) {

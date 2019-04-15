@@ -19,11 +19,14 @@ import org.slf4j.LoggerFactory;
 import modmacao.Executiondependency;
 import modmacao.Installationdependency;
 
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import org.eclipse.cmf.occi.core.Link;
 import org.eclipse.cmf.occi.core.MixinBase;
+import org.eclipse.cmf.occi.infrastructure.Compute;
 import org.modmacao.cm.ConfigurationManagementTool;
 import org.modmacao.cm.ansible.AnsibleCMTool;
 import org.modmacao.occi.platform.Component;
@@ -307,6 +310,7 @@ public class ComponentConnector extends org.modmacao.occi.platform.impl.Componen
 			for (Component component: this.getInstallDependendComps()) {
 				component.deploy();
 			}
+			LOGGER.info("Triggering this component: " + this);
 			status = cmtool.deploy(this);
 			
 			if (status == 0 && assertCompsStatusEquals(getInstallDependendComps(), Status.DEPLOYED))
@@ -319,6 +323,8 @@ public class ComponentConnector extends org.modmacao.occi.platform.impl.Componen
 			break;
 		}
 	}
+
+	
 	// End of user code
 	
 	private List<Component> getInstallDependendComps(){
@@ -358,5 +364,4 @@ public class ComponentConnector extends org.modmacao.occi.platform.impl.Componen
 		}	
 		return true;
 	}
-
 }	
