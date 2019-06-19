@@ -335,7 +335,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 					blockedVMs.addAll(getConnectedComputeNodes(comp));
 				}
 			}
-			 List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+			 List<RunnableAction> slaves = new ArrayList<RunnableAction>();
 			 //List<Thread> threads = new ArrayList<Thread>();
 			 LOGGER.info("\nPRIOR SCHEDULED: " + scheduledComponents);
 			 slaves.addAll(createSubtasks(compCycle, "deploy"));
@@ -345,7 +345,7 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 			 
 			 
 			 List<Thread> threads = new ArrayList<Thread>();
-			 for (DeployerSlave slave : slaves) { 
+			 for (RunnableAction slave : slaves) { 
 				  Thread thread = new Thread(slave);
 				  threads.add(thread);
 				  thread.start(); 
@@ -385,12 +385,12 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 	private void parallelComponentManagement(String action) {
 		LOGGER.info("Performing parallel execution of "+ action);
 		List<Component> scheduledComponents = this.getConnectedComponents();
-		List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+		List<RunnableAction> slaves = new ArrayList<RunnableAction>();
 		List<Thread> threads = new ArrayList<Thread>();
 		LOGGER.info("Executing "+ action +" on: " + scheduledComponents);
 		slaves.addAll(createSubtasks(scheduledComponents, action));
 			 
-		for (DeployerSlave slave : slaves) { 
+		for (RunnableAction slave : slaves) { 
 				Thread thread = new Thread(slave);
 				threads.add(thread);
 				thread.start(); 
@@ -434,11 +434,11 @@ public class ApplicationConnector extends org.modmacao.occi.platform.impl.Applic
 		return computes;
 	}
 	
-	private List<DeployerSlave> createSubtasks(List<Component> comps, String action) {
-		List<DeployerSlave> slaves = new ArrayList<DeployerSlave>();
+	private List<RunnableAction> createSubtasks(List<Component> comps, String action) {
+		List<RunnableAction> slaves = new ArrayList<RunnableAction>();
 
 		for (Component comp : comps) {
-			DeployerSlave slave = new DeployerSlave(this, comp, action);
+			RunnableAction slave = new RunnableAction(this, comp, action);
 			slaves.add(slave);
 		}
 		return slaves;
