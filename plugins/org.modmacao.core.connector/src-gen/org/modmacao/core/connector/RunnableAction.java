@@ -25,8 +25,8 @@ import org.modmacao.occi.platform.Component;
  * @author erbel
  *
  */
-public class DeployerSlave implements Runnable {
-	static Logger LOGGER = Logger.getLogger(DeployerSlave.class);
+public class RunnableAction implements Runnable {
+	static Logger LOGGER = Logger.getLogger(RunnableAction.class);
 	private Component comp;
 	private String action;
 	private ApplicationConnector application;
@@ -41,7 +41,7 @@ public class DeployerSlave implements Runnable {
 	 *            Application to be deployed.
 	 * @param martAppDeployerMaster 
 	 */
-	public DeployerSlave(ApplicationConnector applicationConnector, Component comp, String action) {
+	public RunnableAction(ApplicationConnector applicationConnector, Component comp, String action) {
 		this.comp = comp;
 		this.action = action;
 		this.application = applicationConnector;
